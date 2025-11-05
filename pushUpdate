@@ -5,29 +5,31 @@ from datetime import datetime
 # Config
 BASE_IP = '192.168.1.1'
 PASSWORD = getpass.getpass("Enter SSH password: ")
-LOCAL_FILE = 'next_lesson.txt'
-
 ips = [f'{BASE_IP}{i:02d}' for i in range(1, 17)]
 hostnames = [f'workstation{i:02d}' for i in range(1, 17)]
 
-def cleanup_and_deposit(ip, hostname):
+def cleanup(ip, hostname):
     try:
         user = hostname
-        host = hostname
+        host = ip
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh.connect(host, username=user, password=PASSWORD)
-        
-        # Wipe and recreate
-        ssh.exec_command(f'rm -rf /home/*; mkdir -p /home/{user}; chown -R {user}:{user} /home/{user}')
-        
-        # Deposit file
-        sftp = ssh.open_sftp()
-        sftp.put(LOCAL_FILE, f'/home/{user}/starter.txt')
-        sftp.close()
+       
+        # List visible files before deletion
+        stdin, stdout, stderr = ssh.exec_command(f'ls /home/{user}/ | grep -v "^\\."')
+        files_before = stdout.read().decode().strip()
+        if files_before:
+            print(f"{hostname} deleting: {files_before}")
+            # Delete visible files
+            ssh.exec_command(f'rm -f /home/{user}/[^.]*')
+            print(f"{hostname}: Deleted listed files")
+        else:
+            print(f"{hostname}: No visible files to delete")
+       
         ssh.close()
-        
-        print(f"{hostname} ({ip}): Updated {datetime.now()}")
+       
+        print(f"{hostname} ({ip}): Cleared {datetime.now()}")
         return True
     except Exception as e:
         print(f"{hostname} ({ip}): Failed - {e}")
@@ -35,7 +37,7 @@ def cleanup_and_deposit(ip, hostname):
 
 success_count = 0
 for i in range(16):
-    if cleanup_and_deposit(ips[i], hostnames[i]):
+    if cleanup(ips[i], hostnames[i]):
         success_count += 1
 
 print(f"Completed: {success_count}/16")
